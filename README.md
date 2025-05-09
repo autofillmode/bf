@@ -1,4 +1,4 @@
-# bf - A Brain&lt;bleep> Interpreter
+# bf - A Brainfuck Interpreter
 
 This is an interpreter for the Brainfuck language, written in pure ansi C. 
 
