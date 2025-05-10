@@ -1,25 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* global variables for a simpler stack */
-long stack[255];
-int stackp;
-
-long pop (void);
-long peek (void);
-void push (long);
+#define MAX_PROG_LEN 65536 /* Maximum length of a program */
+#define MEM_SIZE 30000     /* How many bytes of memory the program gets */
 
 int
 main (int argc, char *argv[])
 {
-  int c;
   FILE *fp;
-  unsigned char *array, *dp;
+  int stack[MAX_PROG_LEN], stackp;
+  unsigned char storage[MAX_PROG_LEN];
+  unsigned char tape[MEM_SIZE];
+  int codep, proglength;
+  int datap;
+  int c;
 
-  array = calloc (30000, sizeof (unsigned char));
+  /* Holds all square bracket pairs to jump between */
+  int loops[MAX_PROG_LEN];
 
-  dp = array;
   stackp = 0;
+  datap = 0;
 
   if (argc != 2)
     {
@@ -35,87 +35,69 @@ main (int argc, char *argv[])
       exit (EXIT_FAILURE);
     }
 
-  while ((c = fgetc (fp)) != EOF)
+  proglength = fread (storage, 1, MAX_PROG_LEN, fp);
+  fclose (fp);
+
+  for (codep = 0; codep < proglength; codep++)
     {
-      switch (c)
+      if (storage[codep] == '[')
+        stack[stackp++] = codep;
+
+      if (storage[codep] == ']')
         {
-        case '[':
-          {
-            if (*dp == 0)
-              {
-                int inside = 1;
-                while (inside > 0 && (c = fgetc (fp) != EOF))
-                  {
-                    if (c == '[')
-                      inside++;
-                    else if (c == ']')
-                      inside--;
-                  }
-              }
-            else
-              push (ftell (fp));
-          }
-          break;
-        case ']':
-          {
-            if (*dp != 0)
-              {
-                fseek (fp, peek (), SEEK_SET);
-              }
-            else
-              pop ();
-          }
-          break;
-        case '>':
-          dp++;
-          break;
-        case '<':
-          dp--;
-          break;
-        case '+':
-          (*dp)++;
-          break;
-        case '-':
-          (*dp)--;
-          break;
-        case '.':
-          putchar (*dp);
-          break;
-        case ',':
-          *dp = getchar ();
-          break;
+          if (stackp == 0)
+            {
+              fprintf (stderr, "byte %d: unmatched ']' !\n", codep);
+              exit (EXIT_FAILURE);
+            }
+          else
+            {
+              --stackp;
+              loops[codep] = stack[stackp]; /* save the ]... */
+              loops[stack[stackp]] = codep; /* and then the corresponding [. */
+            }
         }
     }
 
-  free (array);
-  fclose (fp);
+  if (stackp > 0)
+    {
+      fprintf (stderr, "byte %d: unmatched '[' !\n", stack[stackp--]);
+      exit (EXIT_FAILURE);
+    }
 
+  for (codep = 0; codep < proglength; codep++)
+    {
+      switch (storage[codep])
+        {
+        case '>':
+          datap++;
+          break;
+        case '<':
+          datap--;
+          break;
+        case '+':
+          tape[datap]++;
+          break;
+        case '-':
+          tape[datap]--;
+          break;
+        case '.':
+          putchar (tape[datap] == 10 ? '\n' : tape[datap]);
+          fflush (stdout);
+          break;
+        case ',':
+          if ((c = getchar ()) != EOF)
+            tape[datap] = (c == '\n') ? 10 : c;
+          break;
+        case '[':
+          if (tape[datap] == 0)
+            codep = loops[codep];
+          break;
+        case ']':
+          if (tape[datap] != 0)
+            codep = loops[codep];
+          break;
+        }
+    }
   return 0;
-}
-
-void
-push (long value)
-{
-  if (stackp == 255)
-    return;
-
-  stack[stackp] = value;
-  stackp++;
-}
-
-long
-pop (void)
-{
-  if (stackp == 0)
-    return -1;
-
-  return stack[--stackp];
-}
-
-long
-peek (void)
-{
-  if (stackp == 0)
-    return -1;
-  return stack[stackp - 1];
 }
